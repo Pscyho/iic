@@ -27,14 +27,24 @@ module i2c_testbench;
 
     initial begin
         clk = 0;
-        forever #5 clk = ~clk; // 100 MHz
+        forever #5 clk = ~clk; // 100 MHz system clock
     end
 
     initial begin
+        // Reset
         rst = 1; start = 0; rw = 0; addr = 7'b1010001; data_in = 8'hA5;
-        #20 rst = 0;
-        #20 start = 1;
-        #10 start = 0;
-        #500 $stop;
+        #100 rst = 0;
+
+        // Write transaction
+        #200 start = 1; rw = 0; data_in = 8'h3C;
+        #20 start = 0;
+        wait(!busy);
+
+        // Read transaction
+        #500 start = 1; rw = 1;
+        #20 start = 0;
+        wait(!busy);
+
+        #2000 $stop;
     end
 endmodule

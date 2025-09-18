@@ -8,7 +8,6 @@ module i2c_testbench;
     wire ack_error, busy;
     wire sda, scl;
 
-    // Pull-ups
     pullup(sda);
     pullup(scl);
 
@@ -20,27 +19,26 @@ module i2c_testbench;
     );
 
     i2c_slave uut_slave (
-        .clk(clk), .rst(rst), .own_addr(7'b1010001),
+        .rst(rst), .own_addr(7'b1010001),
         .sda(sda), .scl(scl),
         .data_out()
     );
 
     initial begin
         clk = 0;
-        forever #5 clk = ~clk; // 100 MHz system clock
+        forever #5 clk = ~clk; // 100MHz
     end
 
     initial begin
-        // Reset
         rst = 1; start = 0; rw = 0; addr = 7'b1010001; data_in = 8'hA5;
         #100 rst = 0;
 
-        // Write transaction
+        // Write
         #200 start = 1; rw = 0; data_in = 8'h3C;
         #20 start = 0;
         wait(!busy);
 
-        // Read transaction
+        // Read
         #500 start = 1; rw = 1;
         #20 start = 0;
         wait(!busy);

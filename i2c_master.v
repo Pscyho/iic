@@ -1,83 +1,103 @@
 module i2c_master (
-    input  wire        clk,       // System clock
-    input  wire        rst,       // Asynchronous reset (active high)
-    input  wire        start,     // Start signal
-    input  wire [6:0]  addr,      // 7-bit slave address
-    input  wire        rw,        // Read/Write: 0 = write, 1 = read
-    inout  wire        sda,       // Serial data line (bidirectional)
-    inout  wire        scl,       // Serial clock line (open-drain)
-    output reg         busy,      // Master busy
-    // ... Add other ports as needed, e.g. data input/output, ack, etc.
+    input  wire clk,
+    input  wire rst,
+    input  wire start,
+    input  wire [6:0] addr,
+    input  wire [7:0] data_in,
+    input  wire rw,              // 0 = write, 1 = read
+    output reg  [7:0] data_out,
+    output reg ack_error,
+    output reg busy,
+    inout  wire sda,
+    output reg scl
 );
 
-    // Tri-state control signals
-    reg scl_oe;  // 0 = drive low, 1 = release (Z)
-    reg scl_drv; // set to 0 to drive low (never drive high)
+    reg [3:0] state;
+    reg [3:0] bitcnt;
+    reg [7:0] shifter;
+    reg sda_out;
+    reg sda_dir; // 1 = drive, 0 = release (high-Z)
 
-    // Example: implement open-drain scl and sda lines
-    assign scl = scl_oe ? 1'bz : 1'b0;
+    assign sda = (sda_dir) ? sda_out : 1'bz;
 
-    // (For sda, use the same method based on your data send/receive logic)
-    // assign sda = sda_oe ? 1'bz : sda_drv;
-
-    // Internal state machine (simplified, expand as needed)
-    reg [3:0]  state;
-    localparam IDLE   = 0,
-               START  = 1,
-               SCL_LOW = 2,
-               SCL_HIGH = 3,
-               STOP   = 4;
-    reg [7:0] clkdiv; // Used to slow down SCL for simulation/demo
+    localparam IDLE=0, START=1, SEND_ADDR=2, ADDR_ACK=3,
+               SEND_DATA=4, DATA_ACK=5, STOP=6;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            state   <= IDLE;
-            scl_oe  <= 1; // SCL released, high
-            busy    <= 0;
-            clkdiv  <= 0;
+            state <= IDLE;
+            busy <= 0;
+            scl <= 1;
+            sda_out <= 1;
+            sda_dir <= 1;
+            ack_error <= 0;
         end else begin
             case (state)
                 IDLE: begin
-                    scl_oe <= 1;
                     busy <= 0;
                     if (start) begin
-                        state <= START;
                         busy <= 1;
+                        state <= START;
                     end
                 end
+
                 START: begin
-                    scl_oe <= 0;  // Pull clock low to start
-                    clkdiv <= clkdiv + 1;
-                    if (clkdiv == 8'd10) begin
-                        state <= SCL_LOW;
-                        clkdiv <= 0;
+                    sda_dir <= 1;
+                    sda_out <= 0; // START condition
+                    shifter <= {addr, rw};
+                    bitcnt <= 7;
+                    state <= SEND_ADDR;
+                end
+
+                SEND_ADDR: begin
+                    scl <= 0;
+                    sda_dir <= 1;
+                    sda_out <= shifter[bitcnt];
+                    if (bitcnt == 0) state <= ADDR_ACK;
+                    else bitcnt <= bitcnt - 1;
+                    scl <= 1;
+                end
+
+                ADDR_ACK: begin
+                    sda_dir <= 0; // release SDA for ACK
+                    scl <= 1;
+                    if (sda == 0) begin
+                        ack_error <= 0;
+                        shifter <= data_in;
+                        bitcnt <= 7;
+                        state <= SEND_DATA;
+                    end else begin
+                        ack_error <= 1;
+                        state <= STOP;
                     end
                 end
-                SCL_LOW: begin
-                    scl_oe <= 0; // Keep SCL low
-                    clkdiv <= clkdiv + 1;
-                    if (clkdiv == 8'd100) begin
-                        state <= SCL_HIGH;
-                        clkdiv <= 0;
-                    end
+
+                SEND_DATA: begin
+                    scl <= 0;
+                    sda_dir <= 1;
+                    sda_out <= shifter[bitcnt];
+                    if (bitcnt == 0) state <= DATA_ACK;
+                    else bitcnt <= bitcnt - 1;
+                    scl <= 1;
                 end
-                SCL_HIGH: begin
-                    scl_oe <= 1; // Release SCL (goes high)
-                    clkdiv <= clkdiv + 1;
-                    if (clkdiv == 8'd100) begin
-                        state <= STOP; // for demo, stop after one cycle
-                        clkdiv <= 0;
-                    end
+
+                DATA_ACK: begin
+                    sda_dir <= 0; // release SDA for ACK
+                    scl <= 1;
+                    if (sda == 0) ack_error <= 0;
+                    else ack_error <= 1;
+                    state <= STOP;
                 end
+
                 STOP: begin
-                    scl_oe <= 1; // Release clock
+                    scl <= 1;
+                    sda_dir <= 1;
+                    sda_out <= 0;
+                    sda_out <= 1; // STOP condition
                     busy <= 0;
                     state <= IDLE;
                 end
-                default: state <= IDLE;
             endcase
         end
     end
-    // Add data send logic and sda tristate in/out as needed.
-
 endmodule

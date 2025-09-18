@@ -6,6 +6,7 @@ module i2c_slave (
     input  wire scl,
     output reg [7:0] data_out
 );
+
     reg [3:0] bitcnt;
     reg [7:0] shifter;
     reg sda_out;
@@ -31,10 +32,9 @@ module i2c_slave (
                         else addr_match <= 0;
                         addr_phase <= 0;
                         bitcnt <= 0;
-                        // Drive ACK if match
                         if (addr_match) begin
                             sda_dir <= 1;
-                            sda_out <= 0;
+                            sda_out <= 0; // ACK
                         end
                     end else bitcnt <= bitcnt + 1;
                 end else begin
@@ -42,15 +42,14 @@ module i2c_slave (
                     if (bitcnt == 7) begin
                         data_out <= shifter;
                         bitcnt <= 0;
-                        // Drive ACK
                         if (addr_match) begin
                             sda_dir <= 1;
-                            sda_out <= 0;
+                            sda_out <= 0; // ACK
                         end
                     end else bitcnt <= bitcnt + 1;
                 end
             end else begin
-                sda_dir <= 0; // release when clock low
+                sda_dir <= 0; // release when SCL low
             end
         end
     end

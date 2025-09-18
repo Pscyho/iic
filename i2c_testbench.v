@@ -34,8 +34,4 @@ module i2c_testbench;
         #500 $stop;
     end
 
-    initial begin
-        $dumpfile("i2c.vcd");
-        $dumpvars(0, i2c_testbench);
-    end
 endmodule

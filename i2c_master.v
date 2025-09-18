@@ -9,16 +9,18 @@ module i2c_master (
     output reg ack_error,
     output reg busy,
     inout  wire sda,
-    output reg scl
+    inout  wire scl
 );
 
     reg [3:0] state;
     reg [3:0] bitcnt;
     reg [7:0] shifter;
-    reg sda_out;
-    reg sda_dir; // 1 = drive, 0 = release (high-Z)
+
+    reg sda_out, sda_dir;
+    reg scl_out, scl_dir;
 
     assign sda = (sda_dir) ? sda_out : 1'bz;
+    assign scl = (scl_dir) ? scl_out : 1'bz;
 
     localparam IDLE=0, START=1, SEND_ADDR=2, ADDR_ACK=3,
                SEND_DATA=4, DATA_ACK=5, STOP=6;
@@ -27,9 +29,10 @@ module i2c_master (
         if (rst) begin
             state <= IDLE;
             busy <= 0;
-            scl <= 1;
             sda_out <= 1;
             sda_dir <= 1;
+            scl_out <= 1;
+            scl_dir <= 0; // released → pulled high
             ack_error <= 0;
         end else begin
             case (state)
@@ -42,25 +45,24 @@ module i2c_master (
                 end
 
                 START: begin
-                    sda_dir <= 1;
-                    sda_out <= 0; // START condition
+                    sda_dir <= 1; sda_out <= 0; // SDA low
+                    scl_dir <= 0;              // release SCL → high
                     shifter <= {addr, rw};
                     bitcnt <= 7;
                     state <= SEND_ADDR;
                 end
 
                 SEND_ADDR: begin
-                    scl <= 0;
-                    sda_dir <= 1;
-                    sda_out <= shifter[bitcnt];
+                    scl_dir <= 1; scl_out <= 0; // drive SCL low
+                    sda_dir <= 1; sda_out <= shifter[bitcnt];
                     if (bitcnt == 0) state <= ADDR_ACK;
                     else bitcnt <= bitcnt - 1;
-                    scl <= 1;
+                    scl_dir <= 0; // release SCL → high
                 end
 
                 ADDR_ACK: begin
-                    sda_dir <= 0; // release SDA for ACK
-                    scl <= 1;
+                    sda_dir <= 0; // release SDA
+                    scl_dir <= 0; // release SCL → high
                     if (sda == 0) begin
                         ack_error <= 0;
                         shifter <= data_in;
@@ -73,27 +75,25 @@ module i2c_master (
                 end
 
                 SEND_DATA: begin
-                    scl <= 0;
-                    sda_dir <= 1;
-                    sda_out <= shifter[bitcnt];
+                    scl_dir <= 1; scl_out <= 0;
+                    sda_dir <= 1; sda_out <= shifter[bitcnt];
                     if (bitcnt == 0) state <= DATA_ACK;
                     else bitcnt <= bitcnt - 1;
-                    scl <= 1;
+                    scl_dir <= 0;
                 end
 
                 DATA_ACK: begin
-                    sda_dir <= 0; // release SDA for ACK
-                    scl <= 1;
+                    sda_dir <= 0;
+                    scl_dir <= 0;
                     if (sda == 0) ack_error <= 0;
                     else ack_error <= 1;
                     state <= STOP;
                 end
 
                 STOP: begin
-                    scl <= 1;
-                    sda_dir <= 1;
-                    sda_out <= 0;
-                    sda_out <= 1; // STOP condition
+                    scl_dir <= 0; // release SCL high
+                    sda_dir <= 1; sda_out <= 0;
+                    sda_out <= 1; // SDA rising while SCL high → STOP
                     busy <= 0;
                     state <= IDLE;
                 end

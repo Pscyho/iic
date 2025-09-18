@@ -8,6 +8,10 @@ module i2c_testbench;
     wire ack_error, busy;
     wire sda, scl;
 
+    // Pull-ups
+    pullup(sda);
+    pullup(scl);
+
     i2c_master uut_master (
         .clk(clk), .rst(rst), .start(start),
         .addr(addr), .data_in(data_in), .rw(rw),
@@ -23,7 +27,7 @@ module i2c_testbench;
 
     initial begin
         clk = 0;
-        forever #5 clk = ~clk;
+        forever #5 clk = ~clk; // 100 MHz
     end
 
     initial begin
@@ -33,5 +37,4 @@ module i2c_testbench;
         #10 start = 0;
         #500 $stop;
     end
-
 endmodule

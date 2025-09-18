@@ -9,8 +9,7 @@ module i2c_slave (
 
     reg [3:0] bitcnt;
     reg [7:0] shifter;
-    reg sda_out;
-    reg sda_dir;
+    reg sda_out, sda_dir;
     reg addr_phase;
     reg addr_match;
 
